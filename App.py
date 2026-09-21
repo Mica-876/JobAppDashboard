@@ -137,12 +137,17 @@ st.markdown("""
 st.title("Jobappdashboard")
 
 # ==============================================================================
-# 1. ADD JOB (AUTO-PARSE OR MANUAL FALLBACK)
+# 1. ADD JOB (PERMANENT VISIBLE CARD - NO EXPANDER)
 # ==============================================================================
-with st.expander("➕ Add a Job Application", expanded=("parsed_data" in st.session_state)):
+with st.container(border=True):
+    st.markdown("#### ➕ Add a Job Application")
     col_input, col_action = st.columns([4, 1])
     with col_input:
-        target_url = st.text_input("Job Listing URL", placeholder="Paste LinkedIn, Indeed, Glassdoor, or company careers link...", key="input_target_url")
+        target_url = st.text_input(
+            "Job Listing URL", 
+            placeholder="Paste LinkedIn, Indeed, Glassdoor, or company careers link...", 
+            key="input_target_url"
+        )
     with col_action:
         st.write("")
         st.write("")
@@ -247,7 +252,7 @@ st.markdown("---")
 # 3. SEARCH BAR & COMPACT TILE GRID
 # ==============================================================================
 if df.empty:
-    st.info("No applications in pipeline. Click 'Add a Job Application' above to start tracking.")
+    st.info("No applications in pipeline. Paste a link above to start tracking.")
 else:
     # Sized search input bar with explicit label & clear button
     search_col, clear_col, _ = st.columns([3, 1, 3])
