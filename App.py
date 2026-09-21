@@ -10,23 +10,21 @@ DATA_FILE = "applications.csv"
 
 # --- Storage Layer ---
 def load_data():
+    expected_cols = [
+        "Date Added", "Role Title", "Company", "Job URL", 
+        "Summary / Excerpt", "Category", "Status", "Advisor Notes", "Platform"
+    ]
     if os.path.exists(DATA_FILE):
         try:
-            df = pd.read_csv(DATA_FILE)
-            expected_cols = [
-                "Date Added", "Role Title", "Company", "Job URL", 
-                "Summary / Excerpt", "Category", "Status", "Advisor Notes", "Platform"
-            ]
+            df = pd.read_csv(DATA_FILE, dtype=str)
             for col in expected_cols:
                 if col not in df.columns:
                     df[col] = ""
-            return df
+            df = df.fillna("")
+            return df[expected_cols]
         except Exception:
             pass
-    return pd.DataFrame(columns=[
-        "Date Added", "Role Title", "Company", "Job URL", 
-        "Summary / Excerpt", "Category", "Status", "Advisor Notes", "Platform"
-    ])
+    return pd.DataFrame(columns=expected_cols, dtype=str)
 
 def save_data(df):
     df.to_csv(DATA_FILE, index=False)
@@ -137,7 +135,7 @@ st.markdown("""
 st.title("Jobappdashboard")
 
 # ==============================================================================
-# 1. ADD JOB (PERMANENT VISIBLE CARD - NO EXPANDER)
+# 1. ADD JOB (PERMANENT CARD CONTAINER)
 # ==============================================================================
 with st.container(border=True):
     st.markdown("#### ➕ Add a Job Application")
@@ -209,15 +207,15 @@ with st.container(border=True):
                     df = load_data()
                     new_job = pd.DataFrame([{
                         "Date Added": str(date.today()),
-                        "Role Title": val_title.strip(),
-                        "Company": val_company.strip(),
-                        "Job URL": p_data["url"],
-                        "Summary / Excerpt": val_desc.strip(),
-                        "Category": val_cat,
-                        "Status": val_status,
+                        "Role Title": str(val_title).strip(),
+                        "Company": str(val_company).strip(),
+                        "Job URL": str(p_data["url"]).strip(),
+                        "Summary / Excerpt": str(val_desc).strip(),
+                        "Category": str(val_cat),
+                        "Status": str(val_status),
                         "Advisor Notes": "",
-                        "Platform": p_data["platform"]
-                    }])
+                        "Platform": str(p_data["platform"])
+                    }], dtype=str)
                     updated_df = pd.concat([new_job, df], ignore_index=True)
                     save_data(updated_df)
                     del st.session_state["parsed_data"]
@@ -254,7 +252,6 @@ st.markdown("---")
 if df.empty:
     st.info("No applications in pipeline. Paste a link above to start tracking.")
 else:
-    # Sized search input bar with explicit label & clear button
     search_col, clear_col, _ = st.columns([3, 1, 3])
     with search_col:
         search_query = st.text_input(
@@ -269,7 +266,6 @@ else:
             st.session_state["search_input_box"] = ""
             st.rerun()
 
-    # Filter data based on search input
     if search_query.strip():
         q = search_query.strip().lower()
         filtered_df = df[
@@ -312,10 +308,24 @@ else:
                     st.markdown(f"**{row['Role Title']}**")
                     st.caption(f"🏢 {row['Company']} · `{row.get('Platform', 'Direct')}`")
                 with top_r:
-                    if st.button("✕", key=f"del_{original_idx}", help="Delete this application"):
-                        df = df.drop(index=original_idx).reset_index(drop=True)
-                        save_data(df)
+                    if st.button("✕", key=f"del_btn_{original_idx}", help="Delete this application"):
+                        st.session_state[f"confirm_del_{original_idx}"] = True
                         st.rerun()
+
+                # Confirmation Box for Delete
+                if st.session_state.get(f"confirm_del_{original_idx}", False):
+                    st.warning("Are you sure you want to delete this job?")
+                    c_yes, c_no = st.columns(2)
+                    with c_yes:
+                        if st.button("Yes, delete", key=f"confirm_yes_{original_idx}", type="primary"):
+                            df = df.drop(index=original_idx).reset_index(drop=True)
+                            save_data(df)
+                            st.session_state.pop(f"confirm_del_{original_idx}", None)
+                            st.rerun()
+                    with c_no:
+                        if st.button("Cancel", key=f"confirm_no_{original_idx}"):
+                            st.session_state.pop(f"confirm_del_{original_idx}", None)
+                            st.rerun()
 
                 # Status pill & Date
                 st.markdown(
@@ -325,8 +335,8 @@ else:
                 )
 
                 # Summary snippet
-                if pd.notna(row["Summary / Excerpt"]) and row["Summary / Excerpt"].strip():
-                    short_desc = row["Summary / Excerpt"].strip()
+                if pd.notna(row["Summary / Excerpt"]) and str(row["Summary / Excerpt"]).strip():
+                    short_desc = str(row["Summary / Excerpt"]).strip()
                     if len(short_desc) > 85:
                         short_desc = short_desc[:82] + "..."
                     st.markdown(f"<p style='font-size:12px; margin-top:6px; color:#444;'>{short_desc}</p>", unsafe_allow_html=True)
@@ -338,17 +348,27 @@ else:
                 # Advisor Drawer
                 with st.expander("Advisor / Edit"):
                     cur_stat = row["Status"] if row["Status"] in all_statuses else "Applied"
-                    new_stat = st.selectbox("Update Status", all_statuses, index=all_statuses.index(cur_stat), key=f"st_sel_{original_idx}")
+                    new_stat = st.selectbox(
+                        "Update Status", 
+                        all_statuses, 
+                        index=all_statuses.index(cur_stat), 
+                        key=f"st_sel_{original_idx}"
+                    )
                     
                     cur_notes = str(row["Advisor Notes"]) if pd.notna(row["Advisor Notes"]) else ""
-                    new_notes = st.text_area("Advisor Notes / Actions Taken", value=cur_notes, key=f"note_txt_{original_idx}", height=70)
+                    new_notes = st.text_area(
+                        "Advisor Notes / Actions Taken", 
+                        value=cur_notes, 
+                        key=f"note_txt_{original_idx}", 
+                        height=70
+                    )
 
-                    if new_stat != row["Status"] or new_notes != cur_notes:
-                        if st.button("Save", key=f"save_btn_{original_idx}", type="primary"):
-                            df.at[original_idx, "Status"] = new_stat
-                            df.at[original_idx, "Advisor Notes"] = new_notes.strip()
-                            save_data(df)
-                            st.rerun()
+                    if st.button("Save", key=f"save_btn_{original_idx}", type="primary"):
+                        df.loc[original_idx, "Status"] = str(new_stat)
+                        df.loc[original_idx, "Advisor Notes"] = str(new_notes).strip()
+                        save_data(df)
+                        st.success("Updated successfully!")
+                        st.rerun()
 
     # Footer CSV download
     st.markdown("---")
