@@ -69,7 +69,6 @@ def try_extract_job_data(url):
         
         soup = BeautifulSoup(resp.text, "html.parser")
         
-        # 1. Title Extraction
         title = ""
         og_title = soup.find("meta", property="og:title") or soup.find("meta", attrs={"name": "twitter:title"})
         if og_title and og_title.get("content"):
@@ -81,12 +80,10 @@ def try_extract_job_data(url):
 
         title = re.sub(r"(?i)\s*[-|•|–|:]\s*(linkedin|indeed|glassdoor|apply now|jobs|careers).*$", "", title).strip()
 
-        # Check if page was blocked
         blocked_signals = ["security verification", "just a moment", "sign in", "login", "robot or human", "access denied"]
         if any(b in title.lower() for b in blocked_signals) or len(title) < 3:
             return False, "", "", "", "Other"
 
-        # 2. Company Extraction
         company = ""
         og_site = soup.find("meta", property="og:site_name")
         if og_site and og_site.get("content"):
@@ -94,7 +91,6 @@ def try_extract_job_data(url):
             if c_name.lower() not in ["linkedin", "indeed", "glassdoor", "totaljobs", "reed"]:
                 company = c_name
 
-        # 3. Description Extraction
         desc = ""
         og_desc = soup.find("meta", property="og:description") or soup.find("meta", attrs={"name": "description"})
         if og_desc and og_desc.get("content"):
@@ -106,7 +102,6 @@ def try_extract_job_data(url):
         if len(desc) > 280:
             desc = desc[:277] + "..."
 
-        # 4. Auto-Categorization
         combined_text = (title + " " + desc).lower()
         if any(k in combined_text for k in ["soc", "security", "cyber", "analyst", "siem", "incident", "vulnerability", "infosec"]):
             category = "Cybersecurity / SOC"
@@ -249,17 +244,25 @@ k5.metric("Offers", offer_count)
 st.markdown("---")
 
 # ==============================================================================
-# 3. REGULAR SEARCH BAR & COMPACT TILE GRID
+# 3. SEARCH BAR & COMPACT TILE GRID
 # ==============================================================================
 if df.empty:
     st.info("No applications in pipeline. Click 'Add a Job Application' above to start tracking.")
 else:
-    # Single standard search bar
-    search_query = st.text_input(
-        "Search Applications",
-        placeholder="Type company, role title, status (e.g. Declined), category, or keyword...",
-        label_visibility="collapsed"
-    )
+    # Sized search input bar with explicit label & clear button
+    search_col, clear_col, _ = st.columns([3, 1, 3])
+    with search_col:
+        search_query = st.text_input(
+            "🔍 Search Applications",
+            placeholder="Type role, company, or status (e.g. Cisco, SOC, Declined)...",
+            key="search_input_box"
+        )
+    with clear_col:
+        st.write("")
+        st.write("")
+        if st.button("Clear Search", use_container_width=True):
+            st.session_state["search_input_box"] = ""
+            st.rerun()
 
     # Filter data based on search input
     if search_query.strip():
