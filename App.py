@@ -79,10 +79,9 @@ def try_extract_job_data(url):
         elif soup.find("h1"):
             title = soup.find("h1").get_text().strip()
 
-        # Clean off common board suffixes
         title = re.sub(r"(?i)\s*[-|•|–|:]\s*(linkedin|indeed|glassdoor|apply now|jobs|careers).*$", "", title).strip()
 
-        # Check if title looks like a block page or empty
+        # Check if page was blocked
         blocked_signals = ["security verification", "just a moment", "sign in", "login", "robot or human", "access denied"]
         if any(b in title.lower() for b in blocked_signals) or len(title) < 3:
             return False, "", "", "", "Other"
@@ -125,9 +124,9 @@ def try_extract_job_data(url):
     except Exception:
         return False, "", "", "", "Other"
 
-# --- Page Setup & Compact Styles ---
+# --- Page Setup & Styling ---
 st.set_page_config(
-    page_title="Job Pipeline Tracker",
+    page_title="Jobappdashboard",
     page_icon="🎯",
     layout="wide"
 )
@@ -140,10 +139,10 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.title("🎯 Job Pipeline & Advisor Review")
+st.title("Jobappdashboard")
 
 # ==============================================================================
-# 1. SMART AUTO-PARSE WITH MANUAL FALLBACK
+# 1. ADD JOB (AUTO-PARSE OR MANUAL FALLBACK)
 # ==============================================================================
 with st.expander("➕ Add a Job Application", expanded=("parsed_data" in st.session_state)):
     col_input, col_action = st.columns([4, 1])
@@ -170,7 +169,6 @@ with st.expander("➕ Add a Job Application", expanded=("parsed_data" in st.sess
                     "platform": detect_platform(target_url.strip())
                 }
 
-    # If parsing was attempted, render the verification or manual prompt
     if "parsed_data" in st.session_state:
         p_data = st.session_state["parsed_data"]
         st.markdown("---")
@@ -179,7 +177,7 @@ with st.expander("➕ Add a Job Application", expanded=("parsed_data" in st.sess
             st.success(f"✅ Found details from **{p_data['platform']}**! Review and confirm below:")
         else:
             st.warning(
-                f"⚠️ **Could not automatically extract info from {p_data['platform']}** (likely blocked by bot protection / login screen).\n\n"
+                f"⚠️ **Could not automatically extract info from {p_data['platform']}** (protected by login/bot detection).\n\n"
                 "Please enter the title and company manually below:"
             )
 
@@ -251,28 +249,34 @@ k5.metric("Offers", offer_count)
 st.markdown("---")
 
 # ==============================================================================
-# 3. COMPACT TILE GRID
+# 3. REGULAR SEARCH BAR & COMPACT TILE GRID
 # ==============================================================================
 if df.empty:
     st.info("No applications in pipeline. Click 'Add a Job Application' above to start tracking.")
 else:
-    # Filters
-    flt_col1, flt_col2, flt_col3 = st.columns([2, 2, 2])
-    with flt_col1:
-        sel_status = st.multiselect("Filter Status", options=df["Status"].unique().tolist(), default=df["Status"].unique().tolist())
-    with flt_col2:
-        sel_cat = st.multiselect("Filter Category", options=df["Category"].unique().tolist(), default=df["Category"].unique().tolist())
-    with flt_col3:
-        plat_list = [p for p in df["Platform"].unique().tolist() if pd.notna(p) and p != ""]
-        sel_plat = st.multiselect("Filter Platform", options=plat_list, default=plat_list)
+    # Single standard search bar
+    search_query = st.text_input(
+        "Search Applications",
+        placeholder="Type company, role title, status (e.g. Declined), category, or keyword...",
+        label_visibility="collapsed"
+    )
 
-    filtered_df = df[
-        df["Status"].isin(sel_status) & 
-        df["Category"].isin(sel_cat) &
-        (df["Platform"].isin(sel_plat) if sel_plat else True)
-    ].reset_index()
+    # Filter data based on search input
+    if search_query.strip():
+        q = search_query.strip().lower()
+        filtered_df = df[
+            df["Role Title"].str.lower().str.contains(q, na=False) |
+            df["Company"].str.lower().str.contains(q, na=False) |
+            df["Status"].str.lower().str.contains(q, na=False) |
+            df["Category"].str.lower().str.contains(q, na=False) |
+            df["Platform"].str.lower().str.contains(q, na=False) |
+            df["Advisor Notes"].str.lower().str.contains(q, na=False) |
+            df["Summary / Excerpt"].str.lower().str.contains(q, na=False)
+        ].reset_index()
+    else:
+        filtered_df = df.reset_index()
 
-    st.caption(f"Showing **{len(filtered_df)}** application cards")
+    st.caption(f"Showing **{len(filtered_df)}** of **{len(df)}** application cards")
 
     NUM_COLS = 3
     card_cols = st.columns(NUM_COLS)
